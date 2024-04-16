@@ -1,80 +1,88 @@
-"""
-
-Things you need to know:
-Data preprocessing is assumed to be reading data from a CSV file.
-Graph-based modeling is done using NetworkX library.
-Tree-based algorithms are demonstrated using NetworkX's minimum_spanning_tree function.
-Hash table implementation is implicit as Python dictionaries.
-Visualization is performed using NetworkX and Matplotlib.
-Community detection is shown using NetworkX's Girvan-Newman algorithm.
-Centrality measures are calculated using NetworkX's built-in functions.
-Please replace 'your_dataset.csv' with the actual path to your dataset CSV file. 
-Also, ensure that your dataset CSV file has columns named 'source', 'target', and 'weight'
-
-"""
+# graph.py
 
 import networkx as nx
-import matplotlib.pyplot as plt
-import pandas as pd
 
-# Data Preprocessing
-def import_dataset(file_path):
-    return pd.read_csv(file_path)
-
-# Graph-Based Modeling
-def build_graph(data):
+def load_graph_with_attributes(file_path):
     G = nx.Graph()
-    for index, row in data.iterrows():
-        G.add_edge(row['source'], row['target'], weight=row['weight'])  # Assuming 'source', 'target', 'weight' are column names
+    with open(file_path, 'r') as file:
+        for line in file:
+            parts = line.strip().split()
+            node1, node2 = parts[0], parts[1]
+            attributes = {k: v for k, v in (attr.split('=') for attr in parts[2:])} if len(parts) > 2 else {}
+            G.add_edge(node1, node2, **attributes)
     return G
 
-# Tree-Based Algorithms
-def minimal_spanning_tree(G):
-    return nx.minimum_spanning_tree(G)
+def identify_clusters(G):
+    clusters = list(nx.algorithms.community.greedy_modularity_communities(G))
+    return clusters
 
-# Hash Table Implementation (Python dictionaries are used)
-# No explicit implementation needed, Python dictionaries are already hash tables
+def highlight_nodes(G, attribute=None, min_connections=None):
+    highlighted = []
+    for node, attrs in G.nodes(data=True):
+        if attribute and attribute in attrs and attrs[attribute]:
+            highlighted.append(node)
+        elif min_connections is not None and G.degree[node] >= min_connections:
+            highlighted.append(node)
+    return highlighted
 
-# Visualization
-def visualize_graph(G):
-    pos = nx.spring_layout(G)  # Layout algorithm for visualization
-    nx.draw(G, pos, with_labels=True, node_size=300, font_size=8)
+def visualize_graph(G, highlight_nodes=None):
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(10, 10))
+    pos = nx.spring_layout(G)
+    nx.draw(G, pos, with_labels=False, node_size=20, edge_color="gray", linewidths=0.1)
+    if highlight_nodes:
+        nx.draw_networkx_nodes(G, pos, nodelist=highlight_nodes, node_color='r', node_size=50)
     plt.show()
 
-# Community Detection and Analysis
-def detect_communities(G):
-    return nx.algorithms.community.girvan_newman(G)
+def bfs_traversal(G, start_node):
+    traversal_order = list(nx.bfs_tree(G, source=start_node))
+    return traversal_order
 
-# Centrality Measures
+class TreeNode:
+    def __init__(self, data):
+        self.data = data
+        self.left = None
+        self.right = None
+
+def insert_node(root, data):
+    if not root:
+        return TreeNode(data)
+    
+    if data < root.data:
+        root.left = insert_node(root.left, data)
+    else:
+        root.right = insert_node(root.right, data)
+    
+    return root
+
+def in_order_traversal(root):
+    traversal = []
+    if root:
+        traversal = in_order_traversal(root.left)
+        traversal.append(root.data)
+        traversal = traversal + in_order_traversal(root.right)
+    return traversal
+
+def create_binary_search_tree(G):
+    root = None
+    for node in G.nodes():
+        root = insert_node(root, node)
+    return root
+
+def search_node(root, target):
+    while root:
+        if int(root.data) == int(target):
+            return True
+        elif int(root.data) < int(target):
+            root = root.right
+        else:
+            root = root.left
+    return False
+
+def detect_communities(G):
+    return list(nx.algorithms.community.girvan_newman(G))
+
 def calculate_centrality(G):
     degree_centrality = nx.degree_centrality(G)
     closeness_centrality = nx.closeness_centrality(G)
     return degree_centrality, closeness_centrality
-
-# Main Function
-def main():
-    # Importing dataset
-    data = import_dataset('your_dataset.csv')
-
-    # Building graph
-    G = build_graph(data)
-
-    # Minimal Spanning Tree
-    MST = minimal_spanning_tree(G)
-
-    # Visualization
-    visualize_graph(G)
-
-    # Community Detection
-    communities = detect_communities(G)
-
-    # Centrality Measures
-    degree_centrality, closeness_centrality = calculate_centrality(G)
-
-    # Analytical Visualization (not implemented in this example)
-
-if __name__ == "__main__":
-    main()
-
-
-

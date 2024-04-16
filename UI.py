@@ -1,26 +1,10 @@
-"""
-Things to know:
-The SocialNetworkAnalysisApp class represents the main application window.
-It creates a menu bar with options to open a dataset and exit the application.
-The main frame contains a canvas to display the graph visualization and a details frame for additional controls.
-The open_dataset method allows users to open a CSV file containing the network data.
-The draw_graph method visualizes the loaded graph using NetworkX and Matplotlib.
-The analyze_graph method performs analysis on the loaded graph, such as community detection and centrality measures.
-Interaction with the GUI triggers various actions, such as loading a dataset and analyzing the graph.
-The highlight_nodes method has been updated to highlight nodes with high degree centrality using DFS traversal.
-We calculate the degree centrality for each node in the graph and identify nodes with centrality values
-above a certain threshold (in this case, 80% of the maximum centrality value).
-Nodes with high centrality are highlighted in red, while other nodes remain blue.
-
-"""
-
+# ui.py
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-import pandas as pd
-
+from graph import load_graph_with_attributes, visualize_graph, identify_clusters, highlight_nodes, bfs_traversal, create_binary_search_tree, search_node, calculate_centrality, in_order_traversal  # Importing in_order_traversal
 
 class SocialNetworkAnalysisApp:
     def __init__(self, root):
@@ -29,7 +13,9 @@ class SocialNetworkAnalysisApp:
         self.root.geometry("800x600")
 
         self.graph = None
-        self.graph_canvas = None
+        self.scale_factor = 1.0
+        self.x = None
+        self.y = None
 
         self.build_menu()
         self.build_main_frame()
@@ -47,61 +33,119 @@ class SocialNetworkAnalysisApp:
         self.main_frame = tk.Frame(self.root)
         self.main_frame.pack(fill=tk.BOTH, expand=True)
 
-        self.graph_canvas = FigureCanvasTkAgg(plt.figure(), master=self.main_frame)
-        self.graph_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        self.graph_frame = tk.Frame(self.main_frame)
+        self.graph_frame.pack(fill=tk.BOTH, expand=True)
 
-        self.btn_cluster = tk.Button(self.main_frame, text="Identify Clusters", command=self.identify_clusters)
-        self.btn_cluster.pack(side=tk.LEFT, padx=10, pady=10)
+        self.output_frame = tk.Frame(self.main_frame)
+        self.output_frame.pack(fill=tk.BOTH, expand=True)
 
-        self.btn_highlight = tk.Button(self.main_frame, text="Highlight Nodes", command=self.highlight_nodes)
-        self.btn_highlight.pack(side=tk.LEFT, padx=10, pady=10)
+        self.graph_canvas = FigureCanvasTkAgg(plt.figure(figsize=(6, 6)), master=self.graph_frame)
+        self.graph_canvas.draw()
+        self.graph_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        self.graph_canvas.mpl_connect('button_press_event', self.on_press)
+        self.graph_canvas.mpl_connect('button_release_event', self.on_release)
+
+        self.action_label = tk.Label(self.output_frame, text="Select action:")
+        self.action_label.pack(pady=5)
+
+        self.action_var = tk.StringVar()
+        self.action_dropdown = ttk.Combobox(self.output_frame, textvariable=self.action_var, values=["Identify Clusters", "Highlight Nodes", "BFS Traversal", "Create Binary Search Tree", "Search Node", "Calculate Centrality"])
+        self.action_dropdown.pack()
+
+        self.search_label = tk.Label(self.output_frame, text="Enter node to search:")
+        self.search_label.pack(pady=5)
+
+        self.search_var = tk.StringVar()
+        self.search_entry = tk.Entry(self.output_frame, textvariable=self.search_var, state='disabled')  # Disabled by default
+        self.search_entry.pack()
+
+        self.run_button = tk.Button(self.output_frame, text="Run", command=self.execute_action)
+        self.run_button.pack(pady=10)
+
+        self.output_text = tk.Text(self.output_frame, height=10, width=50)
+        self.output_text.pack(fill=tk.BOTH, expand=True)
+
+        self.zoom_in_button = tk.Button(self.output_frame, text="Zoom In", command=self.zoom_in)
+        self.zoom_in_button.pack(side=tk.LEFT, padx=5)
+
+        self.zoom_out_button = tk.Button(self.output_frame, text="Zoom Out", command=self.zoom_out)
+        self.zoom_out_button.pack(side=tk.LEFT, padx=5)
+
+        # Bind the action_dropdown to a function to enable/disable the search_entry
+        self.action_var.trace_add('write', self.enable_search_entry)
+
+    def enable_search_entry(self, *args):
+        # Enable the search_entry if "Search Node" is selected, disable otherwise
+        if self.action_var.get() == "Search Node":
+            self.search_entry.config(state='normal')
+        else:
+            self.search_entry.config(state='disabled')
 
     def open_dataset(self):
-        file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
+        file_path = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
         if file_path:
             try:
-                self.data = pd.read_csv(file_path)
-                self.graph = nx.from_pandas_edgelist(self.data, source='source', target='target', edge_attr='weight')
-                self.draw_graph()
+                self.graph = load_graph_with_attributes(file_path)
+                self.visualize_graph()
                 messagebox.showinfo("Success", "Dataset loaded successfully.")
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to load dataset:\n{str(e)}")
 
-    def draw_graph(self):
+    def visualize_graph(self):
         plt.clf()
         pos = nx.spring_layout(self.graph)
-        nx.draw(self.graph, pos, ax=self.graph_canvas.figure.add_subplot(111), with_labels=True, node_size=300,
-                font_size=8)
+        nx.draw(self.graph, pos, with_labels=False, node_size=20, edge_color="gray", linewidths=0.1)
         self.graph_canvas.draw()
 
-    def identify_clusters(self):
-        if self.graph is None:
-            messagebox.showwarning("Warning", "Please open a dataset first.")
-            return
+    def execute_action(self):
+        self.output_text.delete(1.0, tk.END)
+        
+        action = self.action_var.get()
+        search_value = self.search_var.get()
 
-        clusters = list(nx.algorithms.community.girvan_newman(self.graph))
-        messagebox.showinfo("Clusters", f"Number of clusters: {len(clusters)}")
+        if action == "Identify Clusters":
+            clusters = identify_clusters(self.graph)
+            self.output_text.insert(tk.END, f"Clusters: {clusters}\n")
+        elif action == "Highlight Nodes":
+            highlighted = highlight_nodes(self.graph, min_connections=5)
+            self.output_text.insert(tk.END, f"Highlighted nodes: {highlighted}\n")
+        elif action == "BFS Traversal":
+            start_node = list(self.graph.nodes())[0]
+            bfs_order = bfs_traversal(self.graph, start_node)
+            self.output_text.insert(tk.END, f"BFS traversal order: {bfs_order}\n")
+        elif action == "Create Binary Search Tree":
+            bst_root = create_binary_search_tree(self.graph)
+            bst_traversal = in_order_traversal(bst_root)
+            self.output_text.insert(tk.END, f"Binary search tree traversal: {bst_traversal}\n")
+        elif action == "Search Node":
+            if search_value:
+                result = search_node(create_binary_search_tree(self.graph), int(search_value))
+                self.output_text.insert(tk.END, f"Node {search_value} found: {result}\n")
+            else:
+                messagebox.showwarning("Warning", "Please enter a node value to search.")
+        elif action == "Calculate Centrality":
+            degree_centrality, closeness_centrality = calculate_centrality(self.graph)
+            self.output_text.insert(tk.END, f"Degree Centrality: {degree_centrality}\n")
+            self.output_text.insert(tk.END, f"Closeness Centrality: {closeness_centrality}\n")
+        else:
+            messagebox.showerror("Error", "Invalid action selected.")
 
-    def highlight_nodes(self):
-        if self.graph is None:
-            messagebox.showwarning("Warning", "Please open a dataset first.")
-            return
+    def zoom_in(self):
+        self.scale_factor *= 1.2
+        self.graph_canvas.get_tk_widget().scale("all", 0, 0, self.scale_factor, self.scale_factor)
 
-        # Highlight nodes with high degree centrality using DFS
-        degree_centrality = nx.degree_centrality(self.graph)
-        max_degree_centrality = max(degree_centrality.values())
+    def zoom_out(self):
+        self.scale_factor /= 1.2
+        self.graph_canvas.get_tk_widget().scale("all", 0, 0, self.scale_factor, self.scale_factor)
 
-        highlighted_nodes = set()
-        for node, centrality in degree_centrality.items():
-            if centrality >= max_degree_centrality * 0.8:  # Highlight nodes with degree centrality >= 80% of the max value
-                highlighted_nodes.add(node)
+    def on_press(self, event):
+        self.x = event.x
+        self.y = event.y
 
-        plt.clf()
-        pos = nx.spring_layout(self.graph)
-        nx.draw(self.graph, pos, ax=self.graph_canvas.figure.add_subplot(111), with_labels=True, node_size=300,
-                font_size=8, node_color=['red' if node in highlighted_nodes else 'blue' for node in self.graph.nodes()])
-        self.graph_canvas.draw()
-
+    def on_release(self, event):
+        deltax = event.x - self.x
+        deltay = event.y - self.y
+        self.graph_canvas.get_tk_widget().move("all", deltax, deltay)
 
 if __name__ == "__main__":
     root = tk.Tk()
