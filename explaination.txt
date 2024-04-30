@@ -1,0 +1,8 @@
+Identified Clusters
+Clusters: 
+In the context of a graph, clusters (or communities) are groups of nodes that are more densely connected to each other than to other nodes in the graph. The statement "Identified 16 clusters" means that the graph analysis has found 16 such groups within your network. This is typically achieved through community detection algorithms, which aim to find the high-density connections forming communities within the graph. The clustering here was done using the greedy modularity communities method from networkx, 
+which is a popular choice for detecting community structure in networks.
+Highlighted Nodes
+Highlighted Nodes: The script highlights nodes based on certain criteria you've defined, in this case, 
+nodes with a minimum of 5 connections. 
+Highlighting these nodes (shown as red spots on the graph) helps to visually identify nodes that are significant based on the chosen criterion. The statement "Highlighted 3674 nodes with minimum 5 connections" means that out of all the nodes in your graph, 3674 of them have 5 or more connections (edges) to other nodes. These could be considered as more influential or important within the network, assuming that more connections imply greater importance or centrality.
